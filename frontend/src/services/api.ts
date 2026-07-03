@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 interface RequestOptions extends RequestInit {
   body?: any;
@@ -110,7 +110,8 @@ async function request(url: string, options: RequestOptions = {}): Promise<any> 
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    return Promise.reject(errorData.error || 'Something went wrong');
+    const errorMessage = typeof errorData.error === 'string' ? errorData.error : (errorData.message || JSON.stringify(errorData.error) || 'Something went wrong');
+    return Promise.reject(errorMessage);
   }
 
   // Handle empty or 204 responses
@@ -127,7 +128,7 @@ export const api = {
 };
 
 export async function googleLogin(accessToken: string): Promise<any> {
-  const response = await fetch('http://localhost:5000/auth/google', {
+  const response = await fetch(`${API_BASE_URL}/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ accessToken }),

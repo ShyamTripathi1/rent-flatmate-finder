@@ -42,7 +42,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ interestRequestId, roomT
         await loadHistory(interestRequestId);
       } catch (err: any) {
         if (active) {
-          setError(err?.message || err || 'Failed to load chat history.');
+          setError(typeof err === 'string' ? err : (err?.message || 'Failed to load chat history.'));
         }
       } finally {
         if (active) {

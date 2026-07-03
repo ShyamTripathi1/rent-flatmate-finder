@@ -91,7 +91,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
       await login(email);
       // Auth context updates user state, which triggers app re-render and dashboard routing
     } catch (err: any) {
-      setError(err || 'Failed to sign in. Please check your credentials.');
+      setError(typeof err === 'string' ? err : (err?.message || 'Failed to sign in. Please check your credentials.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -104,7 +104,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
     try {
       await login(quickEmail);
     } catch (err: any) {
-      setError(err || 'Failed to sign in.');
+      setError(typeof err === 'string' ? err : (err?.message || 'Failed to sign in.'));
     } finally {
       setIsSubmitting(false);
     }

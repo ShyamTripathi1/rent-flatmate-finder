@@ -30,7 +30,7 @@ export const Register: React.FC<RegisterProps> = ({ onNavigate }) => {
       // After successful registration, navigate to login so that the owner/tenant quick login sections reflect the new user.
       onNavigate('login');
     } catch (err: any) {
-      setError(err || 'Failed to create account. Please try again.');
+      setError(typeof err === 'string' ? err : (err?.message || 'Failed to create account. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }
