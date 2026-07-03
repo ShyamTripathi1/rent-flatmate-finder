@@ -1,0 +1,123 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String            @id @default(uuid())
+  email         String            @unique
+  passwordHash  String
+  role          String            // "TENANT" | "OWNER" | "ADMIN"
+  name          String
+  createdAt     DateTime          @default(now())
+  
+  tenantProfile TenantProfile?
+  listings      Listing[]
+  sentInterests InterestRequest[]
+  messages      Message[]
+  notifications NotificationLog[]
+  reviews       Review[]
+}
+
+model TenantProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredLocation String
+  budgetMin         Float
+  budgetMax         Float
+  moveInDate        DateTime
+  lifestyleNotes    String?
+  updatedAt         DateTime @updatedAt
+}
+
+model Listing {
+  id               String               @id @default(uuid())
+  ownerId          String
+  owner            User                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  location         String
+  lat              Float?
+  lng              Float?
+  rent             Float
+  availableFrom    DateTime
+  roomType         String               // e.g. "single", "shared", "studio"
+  furnishingStatus String               // e.g. "furnished", "semi-furnished", "unfurnished"
+  photos           String               @default("[]") // JSON stringified array of base64 photos
+  description      String
+  isFilled         Boolean              @default(false)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  
+  scores           CompatibilityScore[]
+  interests        InterestRequest[]
+  reviews          Review[]
+}
+
+model CompatibilityScore {
+  id            String        @id @default(uuid())
+  tenantId      String
+  listingId     String
+  score         Int
+  explanation   String
+  scoringMethod String        // "LLM" | "FALLBACK"
+  needsRescore  Boolean       @default(false)
+  computedAt    DateTime      @default(now()) @updatedAt
+
+  listing       Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, listingId])
+}
+
+model InterestRequest {
+  id          String         @id @default(uuid())
+  tenantId    String
+  tenant      User           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  listingId   String
+  listing     Listing        @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  status      String         @default("PENDING") // "PENDING" | "ACCEPTED" | "DECLINED"
+  createdAt   DateTime       @default(now())
+  respondedAt DateTime?
+
+  messages    Message[]
+
+  @@unique([tenantId, listingId])
+}
+
+model Message {
+  id                String          @id @default(uuid())
+  interestRequestId String
+  interestRequest   InterestRequest @relation(fields: [interestRequestId], references: [id], onDelete: Cascade)
+  senderId          String
+  sender            User            @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content           String
+  createdAt         DateTime        @default(now())
+  readAt            DateTime?
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // e.g. "EMAIL_OWNER_MATCH", "EMAIL_TENANT_DECISION"
+  payload   String   // JSON metadata
+  sentAt    DateTime @default(now())
+  status    String   // "SUCCESS" or "FAILED"
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  tenantId  String
+  tenant    User     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rating    Int      // 1 to 5 stars
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, listingId])
+}
