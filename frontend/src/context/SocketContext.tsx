@@ -60,7 +60,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const token = localStorage.getItem('accessToken');
-    const newSocket = io('http://localhost:5000', {
+    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const newSocket = io(backendUrl, {
       auth: { token },
       autoConnect: true,
     });

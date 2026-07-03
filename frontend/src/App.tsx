@@ -31,11 +31,16 @@ const AppContent: React.FC = () => {
     );
   }
 
+  const renderDashboard = () => {
+    if (user?.role === 'TENANT') return <TenantDashboard />;
+    if (user?.role === 'OWNER') return <OwnerDashboard />;
+    if (user?.role === 'ADMIN') return <AdminDashboard />;
+    return <div>Unknown role</div>;
+  };
+
   return (
     <SocketProvider>
-      {user?.role === 'TENANT' && <TenantDashboard />}
-      {user?.role === 'OWNER' && <OwnerDashboard />}
-      {user?.role === 'ADMIN' && <AdminDashboard />}
+      {renderDashboard()}
     </SocketProvider>
   );
 };
