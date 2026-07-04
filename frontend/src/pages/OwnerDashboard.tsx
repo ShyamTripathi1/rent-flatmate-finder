@@ -667,7 +667,9 @@ export const OwnerDashboard: React.FC = () => {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-slate-900 text-base">{payment.tenantName}</h4>
+                          <h4 className="font-bold text-slate-900 text-base">
+                            {payment.tenantName} {payment.tenantEmail && <span className="text-sm font-normal text-slate-500">({payment.tenantEmail})</span>}
+                          </h4>
                           <span className="px-2 py-0.5 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-1">
                             <ShieldCheck className="w-3.5 h-3.5" />
                             Paid

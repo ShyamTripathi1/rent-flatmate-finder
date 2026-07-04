@@ -260,9 +260,11 @@ export const TenantDashboard: React.FC = () => {
         listingId: paymentModal.interest.listingId,
         location: paymentModal.interest.listing.location,
         ownerName: paymentModal.interest.listing.owner.name,
+        ownerEmail: paymentModal.interest.listing.owner.email,
         ownerId: paymentModal.interest.listing.ownerId ?? paymentModal.interest.listing.owner?.id,
         tenantId: user?.id,
         tenantName: user?.name,
+        tenantEmail: user?.email,
         amount: paymentModal.interest.listing.rent,
         method: paymentMethod,
         status: 'PAID',
@@ -896,7 +898,7 @@ export const TenantDashboard: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 font-medium">
-                          Paid to: <span className="text-slate-800">{payment.ownerName}</span>
+                          Paid to: <span className="text-slate-800">{payment.ownerName}</span> {payment.ownerEmail && <span className="text-slate-400">({payment.ownerEmail})</span>}
                         </p>
                         <p className="text-[10px] text-slate-400 font-mono">
                           Txn ID: {payment.txnRef} • {new Date(payment.paidAt).toLocaleString()}
