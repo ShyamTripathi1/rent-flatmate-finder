@@ -1,4 +1,12 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const getApiUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  return isLocalhost ? 'http://localhost:5000' : 'https://rent-flatmate-finder-f4ec.onrender.com';
+};
+
+const API_BASE_URL = getApiUrl();
 
 interface RequestOptions extends RequestInit {
   body?: any;

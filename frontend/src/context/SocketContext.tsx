@@ -60,7 +60,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     const token = localStorage.getItem('accessToken');
-    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const backendUrl = import.meta.env.VITE_API_URL || (isLocalhost ? 'http://localhost:5000' : 'https://rent-flatmate-finder-f4ec.onrender.com');
     const newSocket = io(backendUrl, {
       auth: { token },
       autoConnect: true,

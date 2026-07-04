@@ -27,7 +27,8 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
   const fetchQuickUsers = () => {
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const apiBase = import.meta.env.VITE_API_URL || (isLocalhost ? 'http://localhost:5000' : 'https://rent-flatmate-finder-f4ec.onrender.com');
     setUsersLoading(true);
     fetch(`${apiBase}/auth/quick-login-users`)
       .then(r => r.json())
