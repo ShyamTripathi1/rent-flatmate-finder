@@ -521,7 +521,9 @@ export const OwnerDashboard: React.FC = () => {
                         {/* Tenant profile block */}
                         <div>
                           <div className="flex items-center gap-3">
-                            <h4 className="font-bold text-black text-base">{item.tenant.name}</h4>
+                            <h4 className="font-bold text-black text-base">
+                              {item.tenant.name} <span className="text-sm font-normal text-slate-500">({item.tenant.email})</span>
+                            </h4>
                             <span className={`px-2 py-0.5 rounded-lg border text-xs font-bold flex items-center gap-1 ${
                               item.status === 'ACCEPTED' ? 'bg-red-600 border-red-700 text-white' :
                               item.status === 'DECLINED' ? 'bg-red-100 border-red-300 text-red-700' :

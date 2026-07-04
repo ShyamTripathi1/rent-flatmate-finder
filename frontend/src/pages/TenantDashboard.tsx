@@ -811,7 +811,7 @@ export const TenantDashboard: React.FC = () => {
                           </span>
                         </div>
                         <p className="text-xs text-slate-500">
-                          Owner: {item.listing.owner.name} | Rent: ₹{item.listing.rent}/mo
+                          Owner: {item.listing.owner.name} <span className="text-slate-400">({item.listing.owner.email})</span> | Rent: ₹{item.listing.rent}/mo
                         </p>
                         {item.compatibility && (
                           <div className="flex items-center gap-1 text-xs text-brand-600 font-semibold bg-brand-50 px-2.5 py-1 rounded-lg border border-brand-100 w-fit">
@@ -959,8 +959,8 @@ export const TenantDashboard: React.FC = () => {
                 <div className="flex justify-between items-start border-b border-slate-200 pb-4">
                   <div>
                     <h2 className="text-xl font-bold text-slate-900">{selectedListing.location}</h2>
-                    <p className="text-xs text-slate-500 mt-1 capitalize">
-                      Owner: {selectedListing.owner?.name} | Room: {selectedListing.roomType}
+                    <p className="text-xs font-semibold text-slate-500 mt-2">
+                      Owner: {selectedListing.owner?.name} <span className="text-slate-400">({selectedListing.owner?.email})</span> | Room: {selectedListing.roomType}
                     </p>
                   </div>
                   <div className="text-right">
