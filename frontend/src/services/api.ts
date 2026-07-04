@@ -62,12 +62,22 @@ async function request(url: string, options: RequestOptions = {}): Promise<any> 
     options.body = JSON.stringify(options.body);
   }
 
+  // Abort requests that take longer than 30 seconds to prevent UI freezing
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
   const config: RequestInit = {
     ...options,
     headers,
+    signal: controller.signal,
   };
 
-  const response = await fetch(`${API_BASE_URL}${url}`, config);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${url}`, config);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (response.status === 401 && tokenService.getRefreshToken()) {
     // Attempt token refresh
@@ -144,6 +154,19 @@ export async function googleLogin(accessToken: string): Promise<any> {
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Google login failed');
   return data;
+}
+
+/**
+ * Silently ping the backend /health endpoint to pre-warm the Render
+ * free-tier instance before the user even tries to log in.
+ * Called once on app load — no UI feedback needed.
+ */
+export function wakeUpBackend(): void {
+  fetch(`${API_BASE_URL}/health`, {
+    signal: AbortSignal.timeout(90_000), // wait up to 90 s for cold start
+  }).catch(() => {
+    // Ignore errors — this is just a warm-up call
+  });
 }
 
 export default api;

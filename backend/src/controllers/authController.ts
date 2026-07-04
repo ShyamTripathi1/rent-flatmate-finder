@@ -1,13 +1,11 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 
 const ROLE_TENANT = 'TENANT';
 const ROLE_OWNER  = 'OWNER';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-
-const prisma = new PrismaClient();
 
 function generateAccessToken(userId: string, email: string, role: string): string {
   return jwt.sign({ userId, email, role }, config.jwtSecret, { expiresIn: '1d' });

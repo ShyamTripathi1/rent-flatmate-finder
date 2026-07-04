@@ -1,12 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
-import { TenantDashboard } from './pages/TenantDashboard';
-import { OwnerDashboard } from './pages/OwnerDashboard';
-import { AdminDashboard } from './pages/AdminDashboard';
 import { Loader } from 'lucide-react';
+
+// Lazy-load heavy dashboard pages — Vite will split them into separate chunks.
+// Login/register loads instantly; dashboards are fetched only when needed.
+const TenantDashboard = lazy(() =>
+  import('./pages/TenantDashboard').then((m) => ({ default: m.TenantDashboard }))
+);
+const OwnerDashboard = lazy(() =>
+  import('./pages/OwnerDashboard').then((m) => ({ default: m.OwnerDashboard }))
+);
+const AdminDashboard = lazy(() =>
+  import('./pages/AdminDashboard').then((m) => ({ default: m.AdminDashboard }))
+);
+
+const DashboardLoader = () => (
+  <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4 text-slate-400">
+    <Loader className="w-8 h-8 animate-spin text-brand-500" />
+    <p>Loading dashboard...</p>
+  </div>
+);
 
 const AppContent: React.FC = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -40,7 +56,9 @@ const AppContent: React.FC = () => {
 
   return (
     <SocketProvider>
-      {renderDashboard()}
+      <Suspense fallback={<DashboardLoader />}>
+        {renderDashboard()}
+      </Suspense>
     </SocketProvider>
   );
 };

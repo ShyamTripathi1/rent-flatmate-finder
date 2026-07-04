@@ -1,9 +1,7 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { computeScore } from '../services/compatibilityService';
-
-const prisma = new PrismaClient();
 
 export async function createListing(req: AuthenticatedRequest, res: Response) {
   try {
@@ -340,80 +338,18 @@ export async function browseListings(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    const scoredListings = await Promise.all(
-      listings.map(async (listing) => {
-        let scoreObj = listing.scores[0];
+    // ─── Concurrency-limited scoring ──────────────────────────────────────
+    // Running all 50 LLM calls at once saturates memory & causes timeouts.
+    // We process in batches of 5 to keep latency low without overloading.
+    const CONCURRENCY = 5;
+    const scoredListings: any[] = [];
 
-        if (!profile) {
-          return {
-            ...listing,
-            photos: JSON.parse(listing.photos),
-            avgRating: (() => {
-              const ratings = (listing as any).reviews?.map((r: any) => r.rating) || [];
-              return ratings.length > 0
-                ? Math.round((ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length) * 10) / 10
-                : 0;
-            })(),
-            totalReviews: (listing as any).reviews?.length || 0,
-            compatibility: {
-              score: 0,
-              explanation: 'Please set up your Tenant Profile to view compatibility scoring.',
-              scoringMethod: 'FALLBACK',
-            },
-          };
-        }
+    async function scoreOne(listing: typeof listings[0]) {
+      let scoreObj = listing.scores[0];
 
-        if (!scoreObj || scoreObj.needsRescore) {
-          try {
-            const calculated = await computeScore(profile, {
-              location: listing.location,
-              rent: listing.rent,
-              availableFrom: listing.availableFrom,
-              roomType: listing.roomType,
-              furnishingStatus: listing.furnishingStatus,
-              description: listing.description,
-            });
-            scoreObj = await prisma.compatibilityScore.upsert({
-              where: {
-                tenantId_listingId: {
-                  tenantId,
-                  listingId: listing.id,
-                },
-              },
-              update: {
-                score: calculated.score,
-                explanation: calculated.explanation,
-                scoringMethod: calculated.scoringMethod,
-                needsRescore: false,
-              },
-              create: {
-                tenantId,
-                listingId: listing.id,
-                score: calculated.score,
-                explanation: calculated.explanation,
-                scoringMethod: calculated.scoringMethod,
-                needsRescore: false,
-              },
-            });
-          } catch (scoreErr) {
-            console.error(`Failed to compute compatibility score for listing ${listing.id}:`, scoreErr);
-            scoreObj = {
-              id: 'temp',
-              tenantId,
-              listingId: listing.id,
-              score: 0,
-              explanation: 'Failed to compute score. System fallback.',
-              scoringMethod: 'FALLBACK',
-              needsRescore: false,
-              computedAt: new Date(),
-            };
-          }
-        }
-
+      if (!profile) {
         return {
           ...listing,
-          scores: undefined,
-          reviews: undefined,
           photos: JSON.parse(listing.photos),
           avgRating: (() => {
             const ratings = (listing as any).reviews?.map((r: any) => r.rating) || [];
@@ -423,13 +359,81 @@ export async function browseListings(req: AuthenticatedRequest, res: Response) {
           })(),
           totalReviews: (listing as any).reviews?.length || 0,
           compatibility: {
-            score: scoreObj.score,
-            explanation: scoreObj.explanation,
-            scoringMethod: scoreObj.scoringMethod,
+            score: 0,
+            explanation: 'Please set up your Tenant Profile to view compatibility scoring.',
+            scoringMethod: 'FALLBACK',
           },
         };
-      })
-    );
+      }
+
+      if (!scoreObj || scoreObj.needsRescore) {
+        try {
+          const calculated = await computeScore(profile, {
+            location: listing.location,
+            rent: listing.rent,
+            availableFrom: listing.availableFrom,
+            roomType: listing.roomType,
+            furnishingStatus: listing.furnishingStatus,
+            description: listing.description,
+          });
+          scoreObj = await prisma.compatibilityScore.upsert({
+            where: { tenantId_listingId: { tenantId, listingId: listing.id } },
+            update: {
+              score: calculated.score,
+              explanation: calculated.explanation,
+              scoringMethod: calculated.scoringMethod,
+              needsRescore: false,
+            },
+            create: {
+              tenantId,
+              listingId: listing.id,
+              score: calculated.score,
+              explanation: calculated.explanation,
+              scoringMethod: calculated.scoringMethod,
+              needsRescore: false,
+            },
+          });
+        } catch (scoreErr) {
+          console.error(`Failed to compute compatibility score for listing ${listing.id}:`, scoreErr);
+          scoreObj = {
+            id: 'temp',
+            tenantId,
+            listingId: listing.id,
+            score: 0,
+            explanation: 'Failed to compute score. System fallback.',
+            scoringMethod: 'FALLBACK',
+            needsRescore: false,
+            computedAt: new Date(),
+          };
+        }
+      }
+
+      return {
+        ...listing,
+        scores: undefined,
+        reviews: undefined,
+        photos: JSON.parse(listing.photos),
+        avgRating: (() => {
+          const ratings = (listing as any).reviews?.map((r: any) => r.rating) || [];
+          return ratings.length > 0
+            ? Math.round((ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length) * 10) / 10
+            : 0;
+        })(),
+        totalReviews: (listing as any).reviews?.length || 0,
+        compatibility: {
+          score: scoreObj.score,
+          explanation: scoreObj.explanation,
+          scoringMethod: scoreObj.scoringMethod,
+        },
+      };
+    }
+
+    // Process in chunks of CONCURRENCY
+    for (let i = 0; i < listings.length; i += CONCURRENCY) {
+      const chunk = listings.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(chunk.map(scoreOne));
+      scoredListings.push(...results);
+    }
 
     scoredListings.sort((a, b) => {
       if (sort === 'price_asc') {

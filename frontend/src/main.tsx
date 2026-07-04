@@ -3,8 +3,13 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { GoogleOAuthProvider } from '@react-oauth/google'
+import { wakeUpBackend } from './services/api'
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+
+// Pre-warm the Render backend the moment JS loads.
+// This fires silently in the background while the user reads the login page.
+wakeUpBackend();
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

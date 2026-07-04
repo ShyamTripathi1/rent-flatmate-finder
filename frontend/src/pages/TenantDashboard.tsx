@@ -24,14 +24,18 @@ import {
   XCircle,
   FileText,
   Loader,
-  Star
+  Star,
+  CreditCard,
+  ShieldCheck,
+  BadgeCheck,
+  Clock
 } from 'lucide-react';
 
 export const TenantDashboard: React.FC = () => {
   const { user, profile, updateProfile, logout } = useAuth();
   const { clearMessages } = useSocket();
 
-  const [activeTab, setActiveTab] = useState<'browse' | 'profile' | 'interests'>('browse');
+  const [activeTab, setActiveTab] = useState<'browse' | 'profile' | 'interests' | 'payments'>('browse');
 
   // Search & Filters state
   const [searchState, setSearchState] = useState('');
@@ -72,6 +76,29 @@ export const TenantDashboard: React.FC = () => {
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState(false);
+
+  // Payment prototype state
+  const [paymentModal, setPaymentModal] = useState<{ interest: any } | null>(null);
+  const [paymentStep, setPaymentStep] = useState<'form' | 'processing' | 'success'>('form');
+  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
+  const [upiId, setUpiId] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardName, setCardName] = useState('');
+  const [myPayments, setMyPayments] = useState<any[]>([]);
+
+  // Load payments from localStorage on mount
+  const PAYMENT_KEY = `rff_all_payments`;
+  const loadPayments = () => {
+    try {
+      const stored = localStorage.getItem(PAYMENT_KEY);
+      if (stored) {
+        const allPayments = JSON.parse(stored);
+        setMyPayments(allPayments.filter((p: any) => p.tenantId === user?.id));
+      }
+    } catch {}
+  };
 
   // Load browse listings
   const fetchListings = async () => {
@@ -150,6 +177,8 @@ export const TenantDashboard: React.FC = () => {
       return () => clearTimeout(timer);
     } else if (activeTab === 'interests') {
       fetchInterests();
+    } else if (activeTab === 'payments') {
+      loadPayments();
     }
   }, [activeTab, sortBy, searchLocation, minRent, maxRent, roomType, furnishing]);
 
@@ -219,6 +248,57 @@ export const TenantDashboard: React.FC = () => {
       setSubmittingInterest(false);
     }
   };
+
+  // Handle payment submission (prototype — stores in localStorage)
+  const handlePayRent = () => {
+    if (!paymentModal) return;
+    setPaymentStep('processing');
+    setTimeout(() => {
+      const payment = {
+        id: `pay_${Date.now()}`,
+        interestId: paymentModal.interest.id,
+        listingId: paymentModal.interest.listingId,
+        location: paymentModal.interest.listing.location,
+        ownerName: paymentModal.interest.listing.owner.name,
+        ownerId: paymentModal.interest.listing.ownerId ?? paymentModal.interest.listing.owner?.id,
+        tenantId: user?.id,
+        tenantName: user?.name,
+        amount: paymentModal.interest.listing.rent,
+        method: paymentMethod,
+        status: 'PAID',
+        paidAt: new Date().toISOString(),
+        txnRef: `TXN${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+      };
+      
+      let allPayments: any[] = [];
+      try {
+        const stored = localStorage.getItem(PAYMENT_KEY);
+        if (stored) allPayments = JSON.parse(stored);
+      } catch {}
+      
+      allPayments.push(payment);
+      localStorage.setItem(PAYMENT_KEY, JSON.stringify(allPayments));
+      setMyPayments(allPayments.filter(p => p.tenantId === user?.id));
+      setPaymentStep('success');
+    }, 2000);
+  };
+
+  const openPaymentModal = (interest: any) => {
+    setPaymentModal({ interest });
+    setPaymentStep('form');
+    setUpiId('');
+    setCardNumber('');
+    setCardExpiry('');
+    setCardCvv('');
+    setCardName('');
+    setPaymentMethod('upi');
+  };
+
+  const hasAlreadyPaid = (interestId: string) =>
+    myPayments.some((p) => p.interestId === interestId && p.status === 'PAID');
+
+  const getPaymentForInterest = (interestId: string) =>
+    myPayments.find((p) => p.interestId === interestId && p.status === 'PAID');
 
   // Check if tenant has sent interest in a listing
   const getInterestForListing = (listingId: string) => {
@@ -291,6 +371,18 @@ export const TenantDashboard: React.FC = () => {
               <User className="w-5 h-5" />
               My Profile
             </button>
+
+            <button
+              onClick={() => { setActiveTab('payments'); setSelectedListing(null); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'payments'
+                  ? 'bg-brand-100 border-l-4 border-brand-500 text-brand-700'
+                  : 'text-black hover:bg-gray-100'
+              }`}
+            >
+              <CreditCard className="w-5 h-5" />
+              My Payments
+            </button>
           </nav>
         </div>
 
@@ -324,11 +416,13 @@ export const TenantDashboard: React.FC = () => {
               {activeTab === 'browse' && 'Explore Rooms'}
               {activeTab === 'interests' && 'My Match Interests'}
               {activeTab === 'profile' && 'Compatibility Settings'}
+              {activeTab === 'payments' && 'Rent Payments'}
             </h2>
             <p className="text-xs text-slate-400 mt-1">
               {activeTab === 'browse' && 'Listings sorted by your flatmate compatibility score'}
               {activeTab === 'interests' && 'Review your active room matches and chat rooms'}
               {activeTab === 'profile' && 'Fine-tune preferences to improve matching results'}
+              {activeTab === 'payments' && 'Manage and view your rent payment history'}
             </p>
           </div>
         </header>
@@ -729,16 +823,35 @@ export const TenantDashboard: React.FC = () => {
 
                       <div className="flex gap-2">
                         {item.status === 'ACCEPTED' ? (
-                          <button
-                            onClick={() => setActiveChat({
-                              id: item.id,
-                              title: `Chat with ${item.listing.owner.name}`
-                            })}
-                            className="bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-md shadow-brand-500/10 flex items-center gap-1.5 hover:scale-105 active:scale-95"
-                          >
-                            <MessageSquare className="w-4.5 h-4.5" />
-                            Open Chat
-                          </button>
+                          <>
+                            <button
+                              onClick={() => setActiveChat({
+                                id: item.id,
+                                title: `Chat with ${item.listing.owner.name}`
+                              })}
+                              className="bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-md shadow-brand-500/10 flex items-center gap-1.5 hover:scale-105 active:scale-95"
+                            >
+                              <MessageSquare className="w-4.5 h-4.5" />
+                              Open Chat
+                            </button>
+                            {hasAlreadyPaid(item.id) ? (
+                              <button
+                                disabled
+                                className="bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl py-2 px-4 text-xs font-bold flex items-center gap-1.5 cursor-not-allowed"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                                Paid
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openPaymentModal(item)}
+                                className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-2 px-4 text-xs font-bold transition-all shadow-md shadow-slate-900/10 flex items-center gap-1.5 hover:scale-105 active:scale-95"
+                              >
+                                <CreditCard className="w-4.5 h-4.5" />
+                                Pay Rent
+                              </button>
+                            )}
+                          </>
                         ) : (
                           <button
                             disabled
@@ -748,6 +861,55 @@ export const TenantDashboard: React.FC = () => {
                             Chat Locked
                           </button>
                         )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Payments Tab */}
+          {activeTab === 'payments' && (
+            <div className="space-y-6">
+              {myPayments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-white border border-slate-200 rounded-2xl p-8">
+                  <CreditCard className="w-12 h-12 opacity-20 mb-2" />
+                  <p className="text-sm font-semibold">No payments yet</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    When your interest is accepted, you can pay rent securely from here.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {myPayments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      className="bg-white border border-slate-200 p-6 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-slate-900 text-base">{payment.location}</h4>
+                          <span className="px-2 py-0.5 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Successful
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">
+                          Paid to: <span className="text-slate-800">{payment.ownerName}</span>
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          Txn ID: {payment.txnRef} • {new Date(payment.paidAt).toLocaleString()}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-xl font-extrabold text-slate-900 flex items-center justify-end gap-1">
+                          ₹{payment.amount}
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+                          Method: {payment.method}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -963,6 +1125,184 @@ export const TenantDashboard: React.FC = () => {
                     </>
                   )}
                 </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {paymentModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl relative flex flex-col border border-slate-200">
+            {paymentStep !== 'success' && (
+              <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between">
+                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                  Secure Payment
+                </h3>
+                {paymentStep !== 'processing' && (
+                  <button
+                    onClick={() => setPaymentModal(null)}
+                    className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-700 transition-colors"
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="p-6">
+              {paymentStep === 'form' && (
+                <div className="space-y-6">
+                  {/* Summary */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+                    <div>
+                      <p className="text-xs text-slate-500 font-semibold mb-0.5">Paying rent for</p>
+                      <p className="text-sm font-extrabold text-slate-900">{paymentModal.interest.listing.location}</p>
+                      <p className="text-xs text-slate-600 mt-1">To: {paymentModal.interest.listing.owner.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-500 font-semibold mb-0.5">Amount</p>
+                      <p className="text-2xl font-black text-slate-900">₹{paymentModal.interest.listing.rent}</p>
+                    </div>
+                  </div>
+
+                  {/* Method selection */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Select Method</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {['upi', 'card', 'netbanking'].map((method) => (
+                        <button
+                          key={method}
+                          onClick={() => setPaymentMethod(method as any)}
+                          className={`py-2 px-3 rounded-xl border text-xs font-bold capitalize transition-all ${
+                            paymentMethod === method
+                              ? 'bg-brand-50 border-brand-300 text-brand-700 shadow-sm'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {method === 'upi' ? 'UPI' : method === 'card' ? 'Card' : 'Net Banking'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Form fields based on method */}
+                  <div className="space-y-4">
+                    {paymentMethod === 'upi' && (
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">UPI ID</label>
+                        <input
+                          type="text"
+                          value={upiId}
+                          onChange={(e) => setUpiId(e.target.value)}
+                          placeholder="name@okbank"
+                          className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:border-brand-500 text-slate-900"
+                        />
+                      </div>
+                    )}
+
+                    {paymentMethod === 'card' && (
+                      <>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Card Number</label>
+                          <input
+                            type="text"
+                            value={cardNumber}
+                            onChange={(e) => setCardNumber(e.target.value)}
+                            placeholder="0000 0000 0000 0000"
+                            maxLength={19}
+                            className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:border-brand-500 text-slate-900 font-mono tracking-widest"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Expiry</label>
+                            <input
+                              type="text"
+                              value={cardExpiry}
+                              onChange={(e) => setCardExpiry(e.target.value)}
+                              placeholder="MM/YY"
+                              className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:border-brand-500 text-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">CVV</label>
+                            <input
+                              type="password"
+                              value={cardCvv}
+                              onChange={(e) => setCardCvv(e.target.value)}
+                              placeholder="***"
+                              maxLength={4}
+                              className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:border-brand-500 text-slate-900 font-mono tracking-widest"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Name on Card</label>
+                          <input
+                            type="text"
+                            value={cardName}
+                            onChange={(e) => setCardName(e.target.value)}
+                            placeholder="John Doe"
+                            className="w-full bg-white border border-slate-300 rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:border-brand-500 text-slate-900"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {paymentMethod === 'netbanking' && (
+                      <div className="text-center py-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <Clock className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-slate-600">Redirects to Bank Portal</p>
+                        <p className="text-xs text-slate-400 mt-1">You will be securely redirected.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handlePayRent}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3.5 text-sm font-bold shadow-lg shadow-slate-900/10 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                  >
+                    <CreditCard className="w-5 h-5" />
+                    Pay ₹{paymentModal.interest.listing.rent} Securely
+                  </button>
+                </div>
+              )}
+
+              {paymentStep === 'processing' && (
+                <div className="py-12 flex flex-col items-center justify-center">
+                  <div className="relative">
+                    <Loader className="w-12 h-12 text-slate-900 animate-spin" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <ShieldCheck className="w-5 h-5 text-slate-900" />
+                    </div>
+                  </div>
+                  <p className="font-bold text-slate-900 mt-6">Processing Payment...</p>
+                  <p className="text-xs text-slate-500 mt-1">Please do not close this window.</p>
+                </div>
+              )}
+
+              {paymentStep === 'success' && (
+                <div className="py-8 flex flex-col items-center justify-center text-center">
+                  <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
+                    <BadgeCheck className="w-10 h-10 text-emerald-500" />
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-900 mb-2">Payment Successful!</h3>
+                  <p className="text-slate-500 text-sm mb-6 max-w-[250px]">
+                    Your rent of ₹{paymentModal.interest.listing.rent} has been sent to {paymentModal.interest.listing.owner.name}.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setPaymentModal(null);
+                      setActiveTab('payments');
+                    }}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white rounded-xl py-3.5 text-sm font-bold transition-all"
+                  >
+                    View Receipt
+                  </button>
+                </div>
               )}
             </div>
           </div>

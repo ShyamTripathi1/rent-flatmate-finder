@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-
-const prisma = new PrismaClient();
 
 function generateAccessToken(userId: string, email: string, role: string): string {
   return jwt.sign({ userId, email, role }, config.jwtSecret, { expiresIn: '1d' });

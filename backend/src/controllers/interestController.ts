@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../lib/prisma';
 
 const STATUS_PENDING  = 'PENDING';
 const STATUS_ACCEPTED = 'ACCEPTED';
@@ -7,8 +7,6 @@ const STATUS_DECLINED = 'DECLINED';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { sendEmail } from '../services/emailService';
 import { computeScore } from '../services/compatibilityService';
-
-const prisma = new PrismaClient();
 
 export async function sendInterest(req: AuthenticatedRequest, res: Response) {
   try {
@@ -237,20 +235,19 @@ export async function getInterests(req: AuthenticatedRequest, res: Response) {
       return res.status(401).json({ error: 'Unauthorized.' });
     }
 
-    let interests = [];
+    let interests: any[] = [];
 
     if (role === 'TENANT') {
-      // Return interests sent by the tenant
-      interests = await prisma.interestRequest.findMany({
+      // Fetch interests + listing + scores in ONE query (no N+1)
+      const raw = await prisma.interestRequest.findMany({
         where: { tenantId: userId },
         include: {
           listing: {
             include: {
-              owner: {
-                select: {
-                  name: true,
-                  email: true,
-                },
+              owner: { select: { name: true, email: true } },
+              scores: {
+                where: { tenantId: userId },
+                take: 1,
               },
             },
           },
@@ -258,35 +255,27 @@ export async function getInterests(req: AuthenticatedRequest, res: Response) {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Inject tenant-specific score
-      interests = await Promise.all(
-        interests.map(async (item) => {
-          const scoreRecord = await prisma.compatibilityScore.findUnique({
-            where: {
-              tenantId_listingId: {
-                tenantId: userId,
-                listingId: item.listingId,
-              },
-            },
-          });
-          return {
-            ...item,
-            compatibility: scoreRecord
-              ? { score: scoreRecord.score, explanation: scoreRecord.explanation }
-              : null,
-          };
-        })
-      );
+      interests = raw.map((item) => {
+        const scoreRecord = item.listing.scores?.[0] ?? null;
+        return {
+          ...item,
+          listing: { ...item.listing, scores: undefined },
+          compatibility: scoreRecord
+            ? { score: scoreRecord.score, explanation: scoreRecord.explanation }
+            : null,
+        };
+      });
+
     } else if (role === 'OWNER') {
-      // Return interests received by the owner for their listings
-      interests = await prisma.interestRequest.findMany({
-        where: {
-          listing: {
-            ownerId: userId,
-          },
-        },
+      // Fetch interests + listing + tenant + scores in ONE query (no N+1)
+      const raw = await prisma.interestRequest.findMany({
+        where: { listing: { ownerId: userId } },
         include: {
-          listing: true,
+          listing: {
+            include: {
+              scores: true, // will filter per-item below
+            },
+          },
           tenant: {
             select: {
               name: true,
@@ -298,25 +287,20 @@ export async function getInterests(req: AuthenticatedRequest, res: Response) {
         orderBy: { createdAt: 'desc' },
       });
 
-      // Inject score into matches
-      interests = await Promise.all(
-        interests.map(async (item) => {
-          const scoreRecord = await prisma.compatibilityScore.findUnique({
-            where: {
-              tenantId_listingId: {
-                tenantId: item.tenantId,
-                listingId: item.listingId,
-              },
-            },
-          });
-          return {
-            ...item,
-            compatibility: scoreRecord
-              ? { score: scoreRecord.score, explanation: scoreRecord.explanation }
-              : null,
-          };
-        })
-      );
+      interests = raw.map((item) => {
+        const scoreRecord =
+          item.listing.scores?.find(
+            (s) => s.tenantId === item.tenantId && s.listingId === item.listingId
+          ) ?? null;
+        return {
+          ...item,
+          listing: { ...item.listing, scores: undefined },
+          compatibility: scoreRecord
+            ? { score: scoreRecord.score, explanation: scoreRecord.explanation }
+            : null,
+        };
+      });
+
     } else {
       // Admin: see all
       interests = await prisma.interestRequest.findMany({
@@ -339,3 +323,4 @@ export async function getInterests(req: AuthenticatedRequest, res: Response) {
     return res.status(500).json({ error: 'Internal server error fetching interests.' });
   }
 }
+

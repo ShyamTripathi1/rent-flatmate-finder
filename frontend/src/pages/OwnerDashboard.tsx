@@ -23,14 +23,17 @@ import {
   CheckCircle,
   XCircle,
   Eye,
-  Camera
+  Camera,
+  CreditCard,
+  ShieldCheck,
+  TrendingUp
 } from 'lucide-react';
 
 export const OwnerDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const { clearMessages } = useSocket();
 
-  const [activeTab, setActiveTab] = useState<'listings' | 'interests'>('listings');
+  const [activeTab, setActiveTab] = useState<'listings' | 'interests' | 'payments'>('listings');
 
   // Listings state
   const [listings, setListings] = useState<any[]>([]);
@@ -60,6 +63,18 @@ export const OwnerDashboard: React.FC = () => {
   // Active chat state
   const [activeChat, setActiveChat] = useState<{ id: string; title: string } | null>(null);
 
+  // Payments state (Prototype)
+  const [receivedPayments, setReceivedPayments] = useState<any[]>([]);
+
+  const loadPayments = () => {
+    try {
+      const stored = localStorage.getItem('rff_all_payments');
+      if (stored) {
+        const allPayments = JSON.parse(stored);
+        setReceivedPayments(allPayments.filter((p: any) => p.ownerId === user?.id));
+      }
+    } catch {}
+  };
   // Fetch Owner listings
   const fetchListings = async () => {
     setLoadingListings(true);
@@ -91,6 +106,8 @@ export const OwnerDashboard: React.FC = () => {
       fetchListings();
     } else if (activeTab === 'interests') {
       fetchInterests();
+    } else if (activeTab === 'payments') {
+      loadPayments();
     }
   }, [activeTab]);
 
@@ -315,6 +332,18 @@ export const OwnerDashboard: React.FC = () => {
                 </span>
               )}
             </button>
+
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                activeTab === 'payments'
+                  ? 'bg-brand-100 border-l-4 border-brand-500 text-brand-700'
+                  : 'text-black hover:bg-gray-100'
+              }`}
+            >
+              <CreditCard className="w-5 h-5" />
+              Rent Payments
+            </button>
           </nav>
         </div>
 
@@ -344,10 +373,14 @@ export const OwnerDashboard: React.FC = () => {
         <header className="px-8 py-5 border-b border-slate-200/60 flex items-center justify-between bg-white/60 backdrop-blur-xl sticky top-0 z-10 shadow-sm">
           <div>
             <h2 className="text-xl font-extrabold text-slate-900">
-              {activeTab === 'listings' ? 'Room Listings Management' : 'Received Interest Requests'}
+              {activeTab === 'listings' && 'Room Listings Management'}
+              {activeTab === 'interests' && 'Received Interest Requests'}
+              {activeTab === 'payments' && 'Rent Payments Received'}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              {activeTab === 'listings' ? 'Publish and manage room advertisements' : 'Approve tenants based on matching insights'}
+              {activeTab === 'listings' && 'Publish and manage room advertisements'}
+              {activeTab === 'interests' && 'Approve tenants based on matching insights'}
+              {activeTab === 'payments' && 'Track and manage rent payments from your tenants'}
             </p>
           </div>
           {activeTab === 'listings' && (
@@ -569,6 +602,90 @@ export const OwnerDashboard: React.FC = () => {
                         ) : (
                           <span className="text-xs text-slate-500 font-semibold italic">Match declined</span>
                         )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Payments Tab */}
+          {activeTab === 'payments' && (
+            <div className="space-y-6">
+              {/* Dashboard Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="glass-card p-6 rounded-2xl border border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Earned</p>
+                    <p className="text-2xl font-black text-slate-900">
+                      ₹{receivedPayments.reduce((sum, p) => sum + Number(p.amount), 0)}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
+                    <IndianRupee className="w-6 h-6" />
+                  </div>
+                </div>
+                <div className="glass-card p-6 rounded-2xl border border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Payments</p>
+                    <p className="text-2xl font-black text-slate-900">{receivedPayments.length}</p>
+                  </div>
+                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                    <CreditCard className="w-6 h-6" />
+                  </div>
+                </div>
+                <div className="glass-card p-6 rounded-2xl border border-slate-800/80 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Recent Activity</p>
+                    <p className="text-2xl font-black text-slate-900">
+                      {receivedPayments.length > 0 ? 'Active' : 'None'}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6" />
+                  </div>
+                </div>
+              </div>
+
+              {receivedPayments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-500 glass-card rounded-2xl p-8">
+                  <CreditCard className="w-12 h-12 opacity-30 mb-2" />
+                  <p className="text-sm font-semibold">No payments received yet</p>
+                  <p className="text-xs text-slate-600 mt-1">
+                    When your tenants pay rent, the payments will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {receivedPayments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      className="glass-card p-6 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-slate-800/80 hover:border-slate-850 transition-all duration-300"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-slate-900 text-base">{payment.tenantName}</h4>
+                          <span className="px-2 py-0.5 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Paid
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 font-medium">
+                          Room: <span className="text-slate-800">{payment.location}</span>
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-mono">
+                          Txn ID: {payment.txnRef} • {new Date(payment.paidAt).toLocaleString()}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-xl font-extrabold text-emerald-600 flex items-center justify-end gap-1">
+                          + ₹{payment.amount}
+                        </div>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+                          via {payment.method}
+                        </p>
                       </div>
                     </div>
                   ))}
